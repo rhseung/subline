@@ -1,0 +1,73 @@
+# Subline
+
+macOS 구독 관리 및 개인 예산 추적 앱. 매달 고정으로 빠져나가는 금액을 한눈에 보고, 적금 가능액을 계산한다.
+
+> macOS 26+ 전용. SwiftUI + Swift Package Manager.
+
+---
+
+## 현재 기능
+
+### 구독 관리
+- 구독 항목 추가/편집/삭제/보관
+- 결제 주기 설정 (일/주/월/년 단위 자유 입력)
+- 무료 체험 기간 자동 감지 — 시작일·종료일 기반으로 상태 자동 계산
+- 다음 결제일 자동 산출
+- 결제일 초과 시 경고 표시
+
+### 통화 및 환율
+- KRW / USD / JPY / EUR / GBP 지원
+- 환율 직접 입력 → 전체 합계를 KRW로 통일 표시
+
+### 아이콘 & 색상
+- SF Symbols 아이콘 선택
+- 프리셋 색상 + 커스텀 HEX 색상 선택 (팝오버 스워치)
+- 아이콘 전경색 흰색/검정 토글
+- 이름 기반 자동 추천 (Spotify, ChatGPT, iCloud 등)
+
+### 필터 & 뷰
+- 전체 / 이번 달 / 무료 체험 / 연간 / 해외 / 보관됨 필터
+- 카드형 리스트 뷰 / 캘린더 뷰 / 보드 뷰
+- 이번 달 합계 / 월 환산 합계 표시
+- 다가오는 결제 6건 빠른 조회
+
+---
+
+## 예정 기능
+
+### 수입 등록
+- 월급, 용돈 등 고정 수입 항목 등록
+- 반복 주기 설정 (월급일 기준)
+
+### 예산 항목
+- 식비, 교통비, 쇼핑 등 월 예산 금액 등록 (건별 입력 없음)
+- 구독과 별도 모델로 관리
+
+### 일회성 지출
+- MT, 생일 선물 등 그달만 발생하는 특별 지출 추가
+
+### 월간 요약
+- `수입 합계 - 구독 합계 - 예산 합계 - 일회성 지출 = 적금 가능액` 계산
+- 월별 흐름 시각화
+
+---
+
+## 빌드
+
+```bash
+# Swift Package Manager
+swift run
+
+# Xcode 빌드 후 앱 복사
+touch Sources/Subline/*.swift
+xcodebuild -project Subline.xcodeproj -scheme Subline -configuration Debug SYMROOT=.xcode-derived/Build
+cp -Rf .xcode-derived/Build/Debug/Subline.app /Applications/Subline.app
+```
+
+**요구사항**: macOS 26 (Tahoe) 이상, Xcode 26+
+
+---
+
+## 라이선스
+
+MIT

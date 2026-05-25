@@ -1,0 +1,225 @@
+import Foundation
+
+@MainActor
+final class SubscriptionStore: ObservableObject {
+    @Published var subscriptions: [Subscription] = [] {
+        didSet { save() }
+    }
+
+    @Published var rates = ExchangeRates() {
+        didSet { save() }
+    }
+
+    @Published var selectedID: Subscription.ID?
+
+    private let fileURL: URL
+
+    init() {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let directory = support.appending(path: "Subline", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        fileURL = directory.appending(path: "subline.json")
+        load()
+        replaceStaleDefaultRatesIfNeeded()
+
+        if subscriptions.isEmpty {
+            subscriptions = Self.samples
+            selectedID = subscriptions.first?.id
+        } else {
+            selectedID = subscriptions.sorted(by: { $0.nextChargeDate < $1.nextChargeDate }).first?.id
+        }
+    }
+
+    var selectedSubscription: Subscription? {
+        guard let selectedID else { return nil }
+        return subscriptions.first { $0.id == selectedID }
+    }
+
+    func binding(for subscription: Subscription) -> BindingBox? {
+        guard let index = subscriptions.firstIndex(where: { $0.id == subscription.id }) else { return nil }
+        return BindingBox(index: index)
+    }
+
+    func addSubscription() {
+        let subscription = Subscription(
+            name: "새 구독",
+            amount: 9900,
+            currency: .krw,
+            cycle: .monthly,
+            planStartDate: Date(),
+            status: .active,
+            colorName: "mint"
+        )
+        subscriptions.append(subscription)
+        selectedID = subscription.id
+    }
+
+    func archiveSelected() {
+        guard let selectedID, let index = subscriptions.firstIndex(where: { $0.id == selectedID }) else { return }
+        subscriptions[index].status = .archived
+    }
+
+    func deleteSelected() {
+        guard let selectedID,
+              let index = subscriptions.firstIndex(where: { $0.id == selectedID }) else {
+            return
+        }
+
+        subscriptions.remove(at: index)
+        self.selectedID = subscriptions.sorted(by: { $0.nextChargeDate < $1.nextChargeDate }).first?.id
+    }
+
+    func filteredSubscriptions(for filter: SidebarFilter) -> [Subscription] {
+        subscriptions
+            .filter { subscription in
+                switch filter {
+                case .all:
+                    subscription.effectiveStatus != .archived
+                case .thisMonth:
+                    subscription.effectiveStatus != .archived && Calendar.current.isDate(subscription.nextChargeDate, equalTo: Date(), toGranularity: .month)
+                case .trials:
+                    subscription.effectiveStatus == .trial
+                case .annual:
+                    subscription.effectiveStatus != .archived && (
+                        subscription.billingPeriodValue == 1 && subscription.billingPeriodUnit == .years ||
+                        subscription.billingPeriodValue == 12 && subscription.billingPeriodUnit == .months
+                    )
+                case .foreign:
+                    subscription.effectiveStatus != .archived && subscription.currency != .krw
+                case .archived:
+                    subscription.effectiveStatus == .archived
+                }
+            }
+            .sorted { $0.nextChargeDate < $1.nextChargeDate }
+    }
+
+    func monthlyTotalKRW(excludingArchived: Bool = true) -> Decimal {
+        subscriptions
+            .filter { !excludingArchived || $0.effectiveStatus != .archived }
+            .reduce(0) { result, subscription in
+                result + rates.krwValue(for: subscription.monthlyEquivalent, currency: subscription.currency)
+            }
+    }
+
+    func thisMonthTotalKRW() -> Decimal {
+        subscriptions
+            .filter { $0.effectiveStatus != .archived && Calendar.current.isDate($0.nextChargeDate, equalTo: Date(), toGranularity: .month) }
+            .reduce(0) { result, subscription in
+                result + rates.krwValue(for: subscription.amount, currency: subscription.currency)
+            }
+    }
+
+    func upcoming(limit: Int = 6) -> [Subscription] {
+        subscriptions
+            .filter { $0.effectiveStatus != .archived && $0.nextChargeDate >= Calendar.current.startOfDay(for: Date()) }
+            .sorted { $0.nextChargeDate < $1.nextChargeDate }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    private func load() {
+        guard let data = try? Data(contentsOf: fileURL) else { return }
+        guard let snapshot = try? JSONDecoder.subline.decode(Snapshot.self, from: data) else { return }
+        subscriptions = snapshot.subscriptions
+        rates = snapshot.rates
+    }
+
+    private func save() {
+        let snapshot = Snapshot(subscriptions: subscriptions, rates: rates)
+        guard let data = try? JSONEncoder.subline.encode(snapshot) else { return }
+        try? data.write(to: fileURL, options: .atomic)
+    }
+
+    private func replaceStaleDefaultRatesIfNeeded() {
+        let staleDefaults = ExchangeRates(usd: 1380, jpy: 9.45, eur: 1490, gbp: 1740)
+        guard rates.usd == staleDefaults.usd,
+              rates.jpy == staleDefaults.jpy,
+              rates.eur == staleDefaults.eur,
+              rates.gbp == staleDefaults.gbp else {
+            return
+        }
+
+        rates = ExchangeRates()
+    }
+
+    struct BindingBox {
+        let index: Int
+    }
+
+    private struct Snapshot: Codable {
+        var subscriptions: [Subscription]
+        var rates: ExchangeRates
+    }
+
+    private static var samples: [Subscription] {
+        let calendar = Calendar.current
+        let now = Date()
+
+        return [
+            Subscription(
+                name: "ChatGPT",
+                amount: 20,
+                currency: .usd,
+                cycle: .monthly,
+                planStartDate: calendar.date(byAdding: .day, value: -25, to: now) ?? now,
+                status: .active,
+                cancellationURL: "https://chatgpt.com",
+                notes: "업무와 리서치용",
+                colorName: "green",
+                symbolName: "bubble.left.and.text.bubble.right"
+            ),
+            Subscription(
+                name: "iCloud+",
+                amount: 3300,
+                currency: .krw,
+                cycle: .monthly,
+                planStartDate: calendar.date(byAdding: .day, value: -18, to: now) ?? now,
+                status: .active,
+                colorName: "blue",
+                symbolName: "icloud"
+            ),
+            Subscription(
+                name: "Figma",
+                amount: 144,
+                currency: .usd,
+                cycle: .yearly,
+                planStartDate: calendar.date(byAdding: .month, value: -9, to: now) ?? now,
+                status: .active,
+                notes: "연간 결제",
+                colorName: "purple",
+                symbolName: "paintpalette"
+            ),
+            Subscription(
+                name: "스트리밍 무료 체험",
+                amount: 14900,
+                currency: .krw,
+                cycle: .monthly,
+                planStartDate: calendar.date(byAdding: .day, value: 14, to: now) ?? now,
+                trialStartDate: now,
+                trialDurationValue: 14,
+                trialDurationUnit: .days,
+                status: .trial,
+                notes: "유료 전환 전에 해지 검토",
+                colorName: "orange",
+                symbolName: "play.tv"
+            )
+        ]
+    }
+}
+
+private extension JSONEncoder {
+    static var subline: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+}
+
+private extension JSONDecoder {
+    static var subline: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+}
