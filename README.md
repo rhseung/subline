@@ -52,17 +52,23 @@ macOS 구독 관리 및 개인 예산 추적 앱. 매달 고정으로 빠져나�
 
 ---
 
-## 빌드
+## 빌드 & 설치
 
 ```bash
-# Swift Package Manager
-swift run
-
-# Xcode 빌드 후 앱 복사
-touch Sources/Subline/*.swift
-xcodebuild -project Subline.xcodeproj -scheme Subline -configuration Debug SYMROOT=.xcode-derived/Build
-cp -Rf .xcode-derived/Build/Debug/Subline.app /Applications/Subline.app
+git clone https://github.com/rhseung/subline.git
+cd subline
+make install
 ```
+
+`make install` 한 줄로 빌드 → `/Applications/Subline.app` 복사 → 실행까지 완료.
+
+| 명령어 | 설명 |
+|--------|------|
+| `make install` | 빌드 + `/Applications` 설치 + 실행 |
+| `make build` | 빌드만 |
+| `make clean` | 빌드 캐시 삭제 |
+
+> 개발 중 빠른 실행: `swift run`
 
 **요구사항**: macOS 26 (Tahoe) 이상, Xcode 26+
 
