@@ -2,6 +2,7 @@
 
 install: build
 	pkill -x Subline || true
+	rm -rf /Applications/Subline.app
 	cp -Rf .xcode-derived/Build/Debug/Subline.app /Applications/Subline.app
 	open /Applications/Subline.app
 

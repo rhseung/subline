@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 @MainActor
 final class SubscriptionStore: ObservableObject {
@@ -115,6 +117,31 @@ final class SubscriptionStore: ObservableObject {
             .sorted { $0.nextChargeDate < $1.nextChargeDate }
             .prefix(limit)
             .map { $0 }
+    }
+
+    func exportData() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "subline-backup.json"
+        panel.title = "데이터 내보내기"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let snapshot = Snapshot(subscriptions: subscriptions, rates: rates)
+        guard let data = try? JSONEncoder.subline.encode(snapshot) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    func importData() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.title = "데이터 가져오기"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.urls.first else { return }
+        guard let data = try? Data(contentsOf: url),
+              let snapshot = try? JSONDecoder.subline.decode(Snapshot.self, from: data) else { return }
+        subscriptions = snapshot.subscriptions
+        rates = snapshot.rates
     }
 
     private func load() {

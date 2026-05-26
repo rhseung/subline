@@ -18,6 +18,17 @@ struct SublineApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+            CommandGroup(after: .newItem) {
+                Divider()
+                Button("데이터 내보내기...") {
+                    store.exportData()
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                Button("데이터 가져오기...") {
+                    store.importData()
+                }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+            }
         }
     }
 }
