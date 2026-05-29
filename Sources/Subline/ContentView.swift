@@ -168,10 +168,38 @@ struct MetricRow: View {
     }
 }
 
+private enum BillingGroup: String, CaseIterable {
+    case weekly = "주간"
+    case monthly = "월간"
+    case yearly = "연간"
+    case other = "기타"
+
+    static func of(_ s: Subscription) -> BillingGroup {
+        switch (s.billingPeriodUnit, s.billingPeriodValue) {
+        case (.weeks, _):          return .weekly
+        case (.months, 1):         return .monthly
+        case (.months, 12):        return .yearly
+        case (.years, 1):          return .yearly
+        default:                   return .other
+        }
+    }
+}
+
 struct SubscriptionListView: View {
     @EnvironmentObject private var store: SubscriptionStore
     let filter: SidebarFilter
     let subscriptions: [Subscription]
+
+    private var grouped: [(group: BillingGroup, items: [Subscription])] {
+        BillingGroup.allCases.compactMap { group in
+            let items = subscriptions.filter { BillingGroup.of($0) == group }
+            return items.isEmpty ? nil : (group, items)
+        }
+    }
+
+    private func subtotal(for items: [Subscription]) -> Decimal {
+        items.reduce(0) { $0 + store.rates.krwValue(for: $1.userMonthlyEquivalent, currency: $1.currency) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -185,13 +213,30 @@ struct SubscriptionListView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(subscriptions) { subscription in
-                            SubscriptionCard(subscription: subscription)
+                    LazyVStack(spacing: 0) {
+                        ForEach(grouped, id: \.group.rawValue) { group, items in
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Text(group.rawValue)
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text("\(Formatters.krw(subtotal(for: items)))/월")
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 4)
+
+                                ForEach(items) { subscription in
+                                    SubscriptionCard(subscription: subscription)
+                                }
+                            }
+                            .padding(.bottom, 20)
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 14)
+                    .padding(.top, 14)
+                    .padding(.bottom, 14)
                 }
             }
         }
