@@ -118,6 +118,26 @@ struct SidebarView: View {
                     subtitle: monthlyShare != monthlyCharge ? "청구 \(Formatters.krw(monthlyCharge * 12))" : nil
                 )
             }
+
+            Section("구독") {
+                MetricRow(title: "활성 구독", value: "\(store.activeCount)개")
+                if store.trialCount > 0 {
+                    MetricRow(title: "무료 체험 중", value: "\(store.trialCount)개")
+                }
+                if store.sharedCount > 0 {
+                    MetricRow(title: "공유 구독", value: "\(store.sharedCount)개")
+                }
+            }
+
+            if let next = store.upcoming(limit: 1).first {
+                Section("다음 결제") {
+                    MetricRow(
+                        title: Formatters.day.string(from: next.nextChargeDate),
+                        value: Formatters.money(next.userAmount, currency: next.currency),
+                        subtitle: next.name
+                    )
+                }
+            }
         }
         .listStyle(.sidebar)
     }

@@ -114,6 +114,14 @@ final class SubscriptionStore: ObservableObject {
             }
     }
 
+    var activeCount: Int {
+        subscriptions.filter { $0.effectiveStatus != .archived }.count
+    }
+
+    var trialCount: Int {
+        subscriptions.filter { $0.effectiveStatus == .trial }.count
+    }
+
     var sharedCount: Int {
         subscriptions.filter { $0.effectiveStatus != .archived && $0.splitCount > 1 }.count
     }
