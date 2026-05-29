@@ -461,13 +461,28 @@ struct SubscriptionEditor: View {
                 }
 
                 EditorSection("환율") {
-                    EditorRow("USD → KRW") { DecimalField("", value: $store.rates.usd).multilineTextAlignment(.trailing) }
+                    EditorRow("USD") { RateText(store.rates.usd) }
                     Divider().padding(.leading, 14)
-                    EditorRow("JPY → KRW") { DecimalField("", value: $store.rates.jpy).multilineTextAlignment(.trailing) }
+                    EditorRow("JPY") { RateText(store.rates.jpy) }
                     Divider().padding(.leading, 14)
-                    EditorRow("EUR → KRW") { DecimalField("", value: $store.rates.eur).multilineTextAlignment(.trailing) }
+                    EditorRow("EUR") { RateText(store.rates.eur) }
                     Divider().padding(.leading, 14)
-                    EditorRow("GBP → KRW") { DecimalField("", value: $store.rates.gbp).multilineTextAlignment(.trailing) }
+                    EditorRow("GBP") { RateText(store.rates.gbp) }
+                    Divider().padding(.leading, 14)
+                    EditorRow("업데이트") {
+                        HStack(spacing: 8) {
+                            if let updated = store.ratesLastUpdated {
+                                Text(updated, style: .relative)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("없음").foregroundStyle(.secondary)
+                            }
+                            Button("갱신") { Task { await store.fetchRates() } }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                        }
+                        .font(.caption)
+                    }
                 }
             }
             .padding(22)
@@ -1136,6 +1151,16 @@ extension Color {
         let g = Double(ns.greenComponent)
         let b = Double(ns.blueComponent)
         return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+}
+
+struct RateText: View {
+    let rate: Decimal
+    init(_ rate: Decimal) { self.rate = rate }
+
+    var body: some View {
+        Text("₩\(rate, format: .number.precision(.fractionLength(0...2)))")
+            .foregroundStyle(.secondary)
     }
 }
 

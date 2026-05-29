@@ -13,6 +13,7 @@ final class SubscriptionStore: ObservableObject {
     }
 
     @Published var selectedID: Subscription.ID?
+    @Published var ratesLastUpdated: Date? = UserDefaults.standard.object(forKey: "ratesLastUpdated") as? Date
 
     private let fileURL: URL
 
@@ -30,6 +31,8 @@ final class SubscriptionStore: ObservableObject {
         } else {
             selectedID = subscriptions.sorted(by: { $0.nextChargeDate < $1.nextChargeDate }).first?.id
         }
+
+        fetchRatesIfNeeded()
     }
 
     var selectedSubscription: Subscription? {
@@ -175,6 +178,31 @@ final class SubscriptionStore: ObservableObject {
         let snapshot = Snapshot(subscriptions: subscriptions, rates: rates)
         guard let data = try? JSONEncoder.subline.encode(snapshot) else { return }
         try? data.write(to: fileURL, options: .atomic)
+    }
+
+    func fetchRatesIfNeeded() {
+        let lastFetch = UserDefaults.standard.object(forKey: "ratesLastUpdated") as? Date
+        guard lastFetch == nil || Date().timeIntervalSince(lastFetch!) > 86400 else { return }
+        Task { await fetchRates() }
+    }
+
+    func fetchRates() async {
+        guard let url = URL(string: "https://api.frankfurter.app/latest?from=KRW&to=USD,JPY,EUR,GBP") else { return }
+        guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
+
+        struct FrankfurterResponse: Decodable {
+            let rates: [String: Double]
+        }
+        guard let response = try? JSONDecoder().decode(FrankfurterResponse.self, from: data) else { return }
+
+        if let usd = response.rates["USD"], usd > 0 { rates.usd = Decimal(1.0 / usd) }
+        if let jpy = response.rates["JPY"], jpy > 0 { rates.jpy = Decimal(1.0 / jpy) }
+        if let eur = response.rates["EUR"], eur > 0 { rates.eur = Decimal(1.0 / eur) }
+        if let gbp = response.rates["GBP"], gbp > 0 { rates.gbp = Decimal(1.0 / gbp) }
+
+        let now = Date()
+        ratesLastUpdated = now
+        UserDefaults.standard.set(now, forKey: "ratesLastUpdated")
     }
 
     private func replaceStaleDefaultRatesIfNeeded() {
