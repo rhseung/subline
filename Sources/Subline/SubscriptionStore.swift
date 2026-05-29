@@ -115,6 +115,22 @@ final class SubscriptionStore: ObservableObject {
         subscriptions.filter { $0.effectiveStatus != .archived && $0.splitCount > 1 }.count
     }
 
+    func monthlyCardChargeKRW(excludingArchived: Bool = true) -> Decimal {
+        subscriptions
+            .filter { !excludingArchived || $0.effectiveStatus != .archived }
+            .reduce(0) { result, subscription in
+                result + rates.krwValue(for: subscription.monthlyEquivalent, currency: subscription.currency)
+            }
+    }
+
+    func thisMonthCardChargeKRW() -> Decimal {
+        subscriptions
+            .filter { $0.effectiveStatus != .archived && Calendar.current.isDate($0.nextChargeDate, equalTo: Date(), toGranularity: .month) }
+            .reduce(0) { result, subscription in
+                result + rates.krwValue(for: subscription.amount, currency: subscription.currency)
+            }
+    }
+
     func upcoming(limit: Int = 6) -> [Subscription] {
         subscriptions
             .filter { $0.effectiveStatus != .archived && $0.nextChargeDate >= Calendar.current.startOfDay(for: Date()) }

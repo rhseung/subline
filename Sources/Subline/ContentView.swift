@@ -96,8 +96,27 @@ struct SidebarView: View {
             }
 
             Section("요약") {
-                MetricRow(title: "이번 달", value: Formatters.krw(store.thisMonthTotalKRW()))
-                MetricRow(title: "월평균", value: Formatters.krw(store.monthlyTotalKRW()))
+                let thisMonthShare = store.thisMonthTotalKRW()
+                let thisMonthCharge = store.thisMonthCardChargeKRW()
+                MetricRow(
+                    title: "이번 달 비용",
+                    value: Formatters.krw(thisMonthShare),
+                    subtitle: thisMonthShare != thisMonthCharge ? "청구 \(Formatters.krw(thisMonthCharge))" : nil
+                )
+
+                let monthlyShare = store.monthlyTotalKRW()
+                let monthlyCharge = store.monthlyCardChargeKRW()
+                MetricRow(
+                    title: "월평균",
+                    value: Formatters.krw(monthlyShare),
+                    subtitle: monthlyShare != monthlyCharge ? "청구 \(Formatters.krw(monthlyCharge))" : nil
+                )
+
+                MetricRow(
+                    title: "연간 예상",
+                    value: Formatters.krw(monthlyShare * 12),
+                    subtitle: monthlyShare != monthlyCharge ? "청구 \(Formatters.krw(monthlyCharge * 12))" : nil
+                )
             }
         }
         .listStyle(.sidebar)
@@ -107,6 +126,7 @@ struct SidebarView: View {
 struct MetricRow: View {
     let title: String
     let value: String
+    var subtitle: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -117,6 +137,12 @@ struct MetricRow: View {
                 .font(.headline)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -235,8 +261,22 @@ struct DashboardStrip: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            SummaryTile(title: "이번 달 결제", value: Formatters.krw(store.thisMonthTotalKRW()), symbol: "calendar")
-            SummaryTile(title: "월평균 비용", value: Formatters.krw(store.monthlyTotalKRW()), symbol: "chart.line.uptrend.xyaxis")
+            let myShare = store.thisMonthTotalKRW()
+            let cardCharge = store.thisMonthCardChargeKRW()
+            SummaryTile(
+                title: "이번 달 비용",
+                value: Formatters.krw(myShare),
+                subtitle: myShare != cardCharge ? "청구 \(Formatters.krw(cardCharge))" : nil,
+                symbol: "calendar"
+            )
+            let myMonthly = store.monthlyTotalKRW()
+            let cardMonthly = store.monthlyCardChargeKRW()
+            SummaryTile(
+                title: "월평균 비용",
+                value: Formatters.krw(myMonthly),
+                subtitle: myMonthly != cardMonthly ? "청구 \(Formatters.krw(cardMonthly))" : nil,
+                symbol: "chart.line.uptrend.xyaxis"
+            )
             SummaryTile(title: "예정 항목", value: "\(store.upcoming(limit: 99).count)개", symbol: "bell")
         }
     }
@@ -245,6 +285,7 @@ struct DashboardStrip: View {
 struct SummaryTile: View {
     let title: String
     let value: String
+    var subtitle: String? = nil
     let symbol: String
 
     var body: some View {
@@ -261,6 +302,12 @@ struct SummaryTile: View {
                     .font(.title3.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 0)
         }
