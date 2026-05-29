@@ -164,6 +164,7 @@ struct Subscription: Identifiable, Codable, Hashable {
     var customMonths: Int
     var billingPeriodValue: Int
     var billingPeriodUnit: BillingPeriodUnit
+    var splitCount: Int
     var planStartDate: Date
     var trialStartDate: Date?
     var trialDurationValue: Int
@@ -184,6 +185,7 @@ struct Subscription: Identifiable, Codable, Hashable {
         customMonths: Int = 1,
         billingPeriodValue: Int? = nil,
         billingPeriodUnit: BillingPeriodUnit? = nil,
+        splitCount: Int = 1,
         planStartDate: Date,
         trialStartDate: Date? = nil,
         trialDurationValue: Int = 14,
@@ -204,6 +206,7 @@ struct Subscription: Identifiable, Codable, Hashable {
         let migratedPeriod = Self.period(from: cycle, customMonths: customMonths)
         self.billingPeriodValue = billingPeriodValue ?? migratedPeriod.value
         self.billingPeriodUnit = billingPeriodUnit ?? migratedPeriod.unit
+        self.splitCount = max(splitCount, 1)
         self.planStartDate = planStartDate
         self.trialStartDate = trialStartDate
         self.trialDurationValue = trialDurationValue
@@ -224,6 +227,10 @@ struct Subscription: Identifiable, Codable, Hashable {
         guard monthsPerCharge > 0 else { return amount }
         return amount / Decimal(monthsPerCharge)
     }
+
+    var userAmount: Decimal { amount / Decimal(max(splitCount, 1)) }
+
+    var userMonthlyEquivalent: Decimal { monthlyEquivalent / Decimal(max(splitCount, 1)) }
 
     var billingPeriodTitle: String {
         "\(max(billingPeriodValue, 1))\(billingPeriodUnit.title)마다"
@@ -268,6 +275,7 @@ struct Subscription: Identifiable, Codable, Hashable {
         case customMonths
         case billingPeriodValue
         case billingPeriodUnit
+        case splitCount
         case planStartDate
         case firstChargeDate
         case lastChargeDate
@@ -295,6 +303,7 @@ struct Subscription: Identifiable, Codable, Hashable {
         let migratedPeriod = Self.period(from: cycle, customMonths: customMonths)
         billingPeriodValue = try container.decodeIfPresent(Int.self, forKey: .billingPeriodValue) ?? migratedPeriod.value
         billingPeriodUnit = try container.decodeIfPresent(BillingPeriodUnit.self, forKey: .billingPeriodUnit) ?? migratedPeriod.unit
+        splitCount = max(try container.decodeIfPresent(Int.self, forKey: .splitCount) ?? 1, 1)
 
         if let decodedPlanStartDate = try container.decodeIfPresent(Date.self, forKey: .planStartDate) {
             planStartDate = decodedPlanStartDate
@@ -335,6 +344,7 @@ struct Subscription: Identifiable, Codable, Hashable {
         try container.encode(customMonths, forKey: .customMonths)
         try container.encode(billingPeriodValue, forKey: .billingPeriodValue)
         try container.encode(billingPeriodUnit, forKey: .billingPeriodUnit)
+        try container.encode(splitCount, forKey: .splitCount)
         try container.encode(planStartDate, forKey: .planStartDate)
         try container.encode(nextChargeDate, forKey: .nextChargeDate)
         try container.encodeIfPresent(trialStartDate, forKey: .trialStartDate)

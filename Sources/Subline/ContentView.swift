@@ -175,6 +175,13 @@ struct SubscriptionCard: View {
                             .font(.caption2.weight(.medium))
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(Color.secondary.opacity(0.15), in: Capsule())
+                        if subscription.splitCount > 1 {
+                            Label("\(subscription.splitCount)명", systemImage: "person.2.fill")
+                                .font(.caption2.weight(.medium))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.12), in: Capsule())
+                                .foregroundStyle(.blue)
+                        }
                     }
                     Text("결제일 \(Formatters.day.string(from: subscription.nextChargeDate))")
                         .font(.caption)
@@ -184,9 +191,19 @@ struct SubscriptionCard: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(Formatters.money(subscription.amount, currency: subscription.currency))
+                    Text(Formatters.money(subscription.userAmount, currency: subscription.currency))
                         .font(.subheadline.weight(.semibold))
-                    if subscription.currency != .krw {
+                    if subscription.splitCount > 1 {
+                        if subscription.currency != .krw {
+                            Text("총 \(Formatters.money(subscription.amount, currency: subscription.currency)) · \(Formatters.krw(store.rates.krwValue(for: subscription.userAmount, currency: subscription.currency))) · \(subscription.billingPeriodTitle)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("총 \(Formatters.money(subscription.amount, currency: subscription.currency)) · \(subscription.billingPeriodTitle)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if subscription.currency != .krw {
                         Text("\(Formatters.krw(store.rates.krwValue(for: subscription.amount, currency: subscription.currency))) · \(subscription.billingPeriodTitle)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -352,6 +369,14 @@ struct SubscriptionEditor: View {
                     EditorRow("다음 결제일") {
                         Text(Formatters.day.string(from: subscription.nextChargeDate)).foregroundStyle(.secondary)
                     }
+                    Divider().padding(.leading, 14)
+                    EditorRow("공유 인원") {
+                        Stepper(
+                            subscription.splitCount == 1 ? "혼자" : "\(subscription.splitCount)명",
+                            value: $subscription.splitCount,
+                            in: 1...20
+                        )
+                    }
                 }
 
                 EditorSection("무료 체험") {
@@ -471,19 +496,30 @@ struct HeaderCard: View {
 
             HStack {
                 VStack(alignment: .leading) {
-                    Text("실제 결제액")
+                    Text(subscription.splitCount > 1 ? "내 부담" : "실제 결제액")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(Formatters.money(subscription.amount, currency: subscription.currency))
+                    Text(Formatters.money(subscription.userAmount, currency: subscription.currency))
                         .font(.title3.weight(.semibold))
                 }
+                if subscription.splitCount > 1 {
+                    VStack(alignment: .leading) {
+                        Text("총액 (\(subscription.splitCount)명)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(Formatters.money(subscription.amount, currency: subscription.currency))
+                            .font(.title3.weight(.semibold))
+                    }
+                }
                 Spacer()
-                VStack(alignment: .leading) {
-                    Text("월평균")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(Formatters.krw(store.rates.krwValue(for: subscription.monthlyEquivalent, currency: subscription.currency)))
-                        .font(.title3.weight(.semibold))
+                if subscription.currency != .krw {
+                    VStack(alignment: .leading) {
+                        Text("원화 환산")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(Formatters.krw(store.rates.krwValue(for: subscription.userAmount, currency: subscription.currency)))
+                            .font(.title3.weight(.semibold))
+                    }
                 }
             }
         }
@@ -720,7 +756,7 @@ struct BoardCard: View {
                     Text(Formatters.day.string(from: subscription.nextChargeDate))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(Formatters.krw(store.rates.krwValue(for: subscription.monthlyEquivalent, currency: subscription.currency)))
+                    Text(Formatters.krw(store.rates.krwValue(for: subscription.userMonthlyEquivalent, currency: subscription.currency)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -787,7 +823,7 @@ struct SubscriptionEvent: Identifiable {
                     subscription: subscription,
                     date: chargeDate,
                     kind: .charge,
-                    amountText: Formatters.krw(rates.krwValue(for: subscription.amount, currency: subscription.currency))
+                    amountText: Formatters.krw(rates.krwValue(for: subscription.userAmount, currency: subscription.currency))
                 )
             )
             chargeDate = subscription.billingPeriodUnit.date(after: chargeDate, value: subscription.billingPeriodValue, calendar: calendar)
