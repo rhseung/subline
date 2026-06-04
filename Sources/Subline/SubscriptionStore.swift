@@ -33,6 +33,7 @@ final class SubscriptionStore: ObservableObject {
         }
 
         fetchRatesIfNeeded()
+        fetchMissingIcons()
     }
 
     var selectedSubscription: Subscription? {
@@ -60,6 +61,15 @@ final class SubscriptionStore: ObservableObject {
         )
         subscriptions.append(subscription)
         selectedID = subscription.id
+
+        guard let term = preset.appStoreSearchTerm else { return }
+        let subID = subscription.id
+        Task {
+            guard let url = await fetchAppIconURL(searchTerm: term),
+                  let idx = subscriptions.firstIndex(where: { $0.id == subID })
+            else { return }
+            subscriptions[idx].iconImageURL = url
+        }
     }
 
     func addSubscription() {
@@ -245,6 +255,41 @@ final class SubscriptionStore: ObservableObject {
         }
 
         rates = ExchangeRates()
+    }
+
+    func fetchMissingIcons() {
+        let nameToTerm = Dictionary(
+            uniqueKeysWithValues: SubscriptionPreset.all.compactMap { p -> (String, String)? in
+                guard let term = p.appStoreSearchTerm else { return nil }
+                return (p.name.lowercased(), term)
+            }
+        )
+        for sub in subscriptions where sub.iconImageURL == nil {
+            guard let term = nameToTerm[sub.name.lowercased()] else { continue }
+            let subID = sub.id
+            Task {
+                guard let url = await fetchAppIconURL(searchTerm: term),
+                      let idx = subscriptions.firstIndex(where: { $0.id == subID })
+                else { return }
+                subscriptions[idx].iconImageURL = url
+            }
+        }
+    }
+
+    private func fetchAppIconURL(searchTerm: String) async -> String? {
+        guard let encoded = searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://itunes.apple.com/search?term=\(encoded)&entity=software&limit=1&country=us")
+        else { return nil }
+
+        struct Response: Decodable { let results: [AppResult] }
+        struct AppResult: Decodable { let artworkUrl100: String? }
+
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let response = try? JSONDecoder().decode(Response.self, from: data),
+              let url100 = response.results.first?.artworkUrl100
+        else { return nil }
+
+        return url100.replacingOccurrences(of: "100x100bb", with: "256x256bb")
     }
 
     struct BindingBox {

@@ -626,12 +626,12 @@ struct HeaderCard: View {
         VStack(spacing: 0) {
             ZStack {
                 Ellipse()
-                    .fill(brandColor.opacity(0.45))
-                    .frame(width: 130, height: 55)
-                    .blur(radius: 28)
+                    .fill(brandColor.opacity(0.28))
+                    .frame(width: 110, height: 46)
+                    .blur(radius: 22)
 
                 ServiceIcon(subscription: subscription, size: 64)
-                    .shadow(color: brandColor.opacity(0.55), radius: 16, x: 0, y: 5)
+                    .shadow(color: brandColor.opacity(0.3), radius: 10, x: 0, y: 4)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 22)
@@ -674,7 +674,7 @@ struct HeaderCard: View {
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(RadialGradient(
-                    colors: [brandColor.opacity(0.22), .clear],
+                    colors: [brandColor.opacity(0.11), .clear],
                     center: UnitPoint(x: 0.5, y: 0.0),
                     startRadius: 10,
                     endRadius: 140
@@ -1015,6 +1015,23 @@ struct ServiceIcon: View {
     let size: CGFloat
 
     var body: some View {
+        if let urlString = subscription.iconImageURL, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipped()
+                } else {
+                    symbolIcon
+                }
+            }
+            .clipShape(Circle())
+        } else {
+            symbolIcon
+        }
+    }
+
+    private var symbolIcon: some View {
         ZStack {
             Circle()
                 .fill(ServiceAppearance.color(named: subscription.colorName).gradient)
