@@ -554,10 +554,18 @@ struct SubscriptionEditor: View {
         }
         .toolbar {
             ToolbarItem {
-                Button(role: .destructive) {
-                    store.archiveSelected()
-                } label: {
-                    Label("보관", systemImage: "archivebox")
+                if store.selectedSubscription?.effectiveStatus == .archived {
+                    Button {
+                        store.unarchiveSelected()
+                    } label: {
+                        Label("보관 해제", systemImage: "archivebox.fill")
+                    }
+                } else {
+                    Button(role: .destructive) {
+                        store.archiveSelected()
+                    } label: {
+                        Label("보관", systemImage: "archivebox")
+                    }
                 }
             }
             ToolbarItem {

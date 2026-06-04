@@ -64,6 +64,11 @@ final class SubscriptionStore: ObservableObject {
         subscriptions[index].status = .archived
     }
 
+    func unarchiveSelected() {
+        guard let selectedID, let index = subscriptions.firstIndex(where: { $0.id == selectedID }) else { return }
+        subscriptions[index].status = .active
+    }
+
     func deleteSelected() {
         guard let selectedID,
               let index = subscriptions.firstIndex(where: { $0.id == selectedID }) else {
