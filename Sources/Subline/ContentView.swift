@@ -1015,20 +1015,19 @@ struct ServiceIcon: View {
     let size: CGFloat
 
     var body: some View {
-        if let urlString = subscription.iconImageURL, let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                        .frame(width: size, height: size)
-                        .clipped()
-                } else {
-                    symbolIcon
+        ZStack {
+            symbolIcon
+
+            if let urlString = subscription.iconImageURL, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFill()
+                    }
                 }
             }
-            .clipShape(Circle())
-        } else {
-            symbolIcon
         }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 
     private var symbolIcon: some View {

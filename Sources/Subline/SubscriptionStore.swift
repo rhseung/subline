@@ -258,14 +258,14 @@ final class SubscriptionStore: ObservableObject {
     }
 
     func fetchMissingIcons() {
-        let nameToTerm = Dictionary(
-            uniqueKeysWithValues: SubscriptionPreset.all.compactMap { p -> (String, String)? in
-                guard let term = p.appStoreSearchTerm else { return nil }
-                return (p.name.lowercased(), term)
-            }
-        )
         for sub in subscriptions where sub.iconImageURL == nil {
-            guard let term = nameToTerm[sub.name.lowercased()] else { continue }
+            let subLow = sub.name.lowercased()
+            guard let matched = SubscriptionPreset.all.first(where: { preset in
+                guard preset.appStoreSearchTerm != nil else { return false }
+                let pLow = preset.name.lowercased()
+                return subLow == pLow || subLow.contains(pLow) || pLow.contains(subLow)
+            }), let term = matched.appStoreSearchTerm else { continue }
+
             let subID = sub.id
             Task {
                 guard let url = await fetchAppIconURL(searchTerm: term),
