@@ -45,6 +45,23 @@ final class SubscriptionStore: ObservableObject {
         return BindingBox(index: index)
     }
 
+    func addSubscription(from preset: SubscriptionPreset) {
+        let subscription = Subscription(
+            name: preset.name,
+            amount: preset.amount,
+            currency: preset.currency,
+            cycle: .monthly,
+            billingPeriodValue: preset.billingPeriodValue,
+            billingPeriodUnit: preset.billingPeriodUnit,
+            planStartDate: Date(),
+            status: .active,
+            colorName: preset.colorName,
+            symbolName: preset.symbolName
+        )
+        subscriptions.append(subscription)
+        selectedID = subscription.id
+    }
+
     func addSubscription() {
         let subscription = Subscription(
             name: "새 구독",

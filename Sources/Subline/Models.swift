@@ -442,6 +442,40 @@ struct ExchangeRates: Codable {
     }
 }
 
+struct SubscriptionPreset: Identifiable {
+    let id = UUID()
+    let name: String
+    let symbolName: String
+    let colorName: String
+    let amount: Decimal
+    let currency: CurrencyCode
+    let billingPeriodValue: Int
+    let billingPeriodUnit: BillingPeriodUnit
+    let category: String
+
+    static let all: [SubscriptionPreset] = [
+        .init(name: "Netflix",          symbolName: "play.tv",                                colorName: "red",    amount: 17000,  currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "Spotify",          symbolName: "headphones",                             colorName: "green",  amount: 9.99,   currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "Apple Music",      symbolName: "music.note",                             colorName: "red",    amount: 10900,  currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "YouTube Premium",  symbolName: "play.rectangle.fill",                   colorName: "red",    amount: 14900,  currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "Disney+",          symbolName: "star.fill",                              colorName: "blue",   amount: 9.99,   currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "iCloud+",          symbolName: "icloud.fill",                            colorName: "blue",   amount: 3900,   currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "클라우드"),
+        .init(name: "Google One",       symbolName: "cloud.fill",                             colorName: "blue",   amount: 2.99,   currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "클라우드"),
+        .init(name: "Claude",           symbolName: "sparkles",                               colorName: "orange", amount: 20,     currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "AI"),
+        .init(name: "ChatGPT Plus",     symbolName: "waveform",                               colorName: "teal",   amount: 20,     currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "AI"),
+        .init(name: "Notion",           symbolName: "doc.fill",                               colorName: "gray",   amount: 8,      currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "생산성"),
+        .init(name: "Todoist",          symbolName: "checklist",                              colorName: "red",    amount: 4,      currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "생산성"),
+        .init(name: "1Password",        symbolName: "key.fill",                               colorName: "blue",   amount: 2.99,   currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "생산성"),
+        .init(name: "GitHub Copilot",   symbolName: "chevron.left.forwardslash.chevron.right",colorName: "gray",   amount: 10,     currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발"),
+        .init(name: "Figma",            symbolName: "paintpalette",                           colorName: "purple", amount: 15,     currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발"),
+        .init(name: "Cursor",           symbolName: "terminal.fill",                          colorName: "gray",   amount: 20,     currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발"),
+        .init(name: "Setapp",           symbolName: "square.stack.3d.up.fill",                colorName: "purple", amount: 9.99,   currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발"),
+        .init(name: "Discord Nitro",    symbolName: "message.fill",                           colorName: "indigo", amount: 9.99,   currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "기타"),
+        .init(name: "Xbox Game Pass",   symbolName: "gamecontroller",                         colorName: "green",  amount: 14.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "기타"),
+        .init(name: "Duolingo Plus",    symbolName: "globe",                                  colorName: "green",  amount: 6.99,   currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "기타"),
+    ]
+}
+
 enum SidebarFilter: String, CaseIterable, Identifiable {
     case all
     case thisMonth

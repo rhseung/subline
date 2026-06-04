@@ -4,6 +4,7 @@ struct ContentView: View {
     @EnvironmentObject private var store: SubscriptionStore
     @State private var filter: SidebarFilter = .all
     @State private var viewMode: SubscriptionViewMode = .list
+    @State private var isQuickAddPresented = false
 
     private var filtered: [Subscription] {
         store.filteredSubscriptions(for: filter)
@@ -27,7 +28,7 @@ struct ContentView: View {
                     }
                     ToolbarItem {
                         Button {
-                            store.addSubscription()
+                            isQuickAddPresented = true
                         } label: {
                             Label("추가", systemImage: "plus")
                         }
@@ -38,6 +39,9 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 320, ideal: 390, max: 460)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: $isQuickAddPresented) {
+            QuickAddView()
+        }
     }
 }
 
@@ -614,52 +618,90 @@ struct HeaderCard: View {
     let subscription: Subscription
     @EnvironmentObject private var store: SubscriptionStore
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(subscription.name)
-                        .font(.largeTitle.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                    Text("다음 결제일 \(Formatters.day.string(from: subscription.nextChargeDate))")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                ServiceIcon(subscription: subscription, size: 46)
-            }
+    private var brandColor: Color {
+        ServiceAppearance.color(named: subscription.colorName)
+    }
 
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(subscription.splitCount > 1 ? "내 부담" : "실제 결제액")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(Formatters.money(subscription.userAmount, currency: subscription.currency))
-                        .font(.title3.weight(.semibold))
-                }
-                if subscription.splitCount > 1 {
-                    VStack(alignment: .leading) {
-                        Text("총액 (\(subscription.splitCount)명)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(Formatters.money(subscription.amount, currency: subscription.currency))
-                            .font(.title3.weight(.semibold))
-                    }
-                }
-                Spacer()
-                if subscription.currency != .krw {
-                    VStack(alignment: .leading) {
-                        Text("원화 환산")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(Formatters.krw(store.rates.krwValue(for: subscription.userAmount, currency: subscription.currency)))
-                            .font(.title3.weight(.semibold))
-                    }
-                }
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Ellipse()
+                    .fill(brandColor.opacity(0.45))
+                    .frame(width: 130, height: 55)
+                    .blur(radius: 28)
+
+                ServiceIcon(subscription: subscription, size: 64)
+                    .shadow(color: brandColor.opacity(0.55), radius: 16, x: 0, y: 5)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 22)
+
+            VStack(spacing: 4) {
+                Text(subscription.name)
+                    .font(.title2.weight(.bold))
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.75)
+                    .lineLimit(1)
+                    .padding(.horizontal, 16)
+                Text(subscription.billingPeriodTitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 18)
+
+            Divider().padding(.horizontal, 18)
+
+            VStack(spacing: 0) {
+                HeaderInfoRow(label: subscription.splitCount > 1 ? "내 부담" : "결제 금액",
+                              value: Formatters.money(subscription.userAmount, currency: subscription.currency))
+                if subscription.splitCount > 1 {
+                    HeaderInfoRow(label: "총액 (\(subscription.splitCount)명)",
+                                  value: Formatters.money(subscription.amount, currency: subscription.currency))
+                }
+                if subscription.currency != .krw {
+                    HeaderInfoRow(label: "원화 환산",
+                                  value: Formatters.krw(store.rates.krwValue(for: subscription.userAmount, currency: subscription.currency)))
+                }
+                HeaderInfoRow(label: "다음 결제일",
+                              value: Formatters.day.string(from: subscription.nextChargeDate),
+                              isLast: true)
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 6)
         }
-        .padding(18)
         .sublineGlass(cornerRadius: 18)
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(RadialGradient(
+                    colors: [brandColor.opacity(0.22), .clear],
+                    center: UnitPoint(x: 0.5, y: 0.0),
+                    startRadius: 10,
+                    endRadius: 140
+                ))
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+struct HeaderInfoRow: View {
+    let label: String
+    let value: String
+    var isLast: Bool = false
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .font(.subheadline.weight(.medium))
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            if !isLast { Divider() }
+        }
     }
 }
 
@@ -1249,5 +1291,148 @@ struct DecimalField: View {
     var body: some View {
         TextField(title, value: $value, format: .number.precision(.fractionLength(0...2)))
             .textFieldStyle(.plain)
+    }
+}
+
+struct QuickAddView: View {
+    @EnvironmentObject private var store: SubscriptionStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+
+    private var categories: [(String, [SubscriptionPreset])] {
+        let filtered = searchText.isEmpty
+            ? SubscriptionPreset.all
+            : SubscriptionPreset.all.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        let grouped = Dictionary(grouping: filtered) { $0.category }
+        let order = ["스트리밍", "클라우드", "AI", "생산성", "개발", "기타"]
+        return order.compactMap { cat in
+            guard let items = grouped[cat], !items.isEmpty else { return nil }
+            return (cat, items)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("구독 추가")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 14)
+
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                TextField("서비스 검색", text: $searchText)
+                    .textFieldStyle(.plain)
+                if !searchText.isEmpty {
+                    Button { searchText = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, 24)
+            .padding(.bottom, 14)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if categories.isEmpty {
+                        Text("검색 결과 없음")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 30)
+                    } else {
+                        ForEach(categories, id: \.0) { category, presets in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(category)
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 4)
+
+                                LazyVGrid(
+                                    columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4),
+                                    spacing: 10
+                                ) {
+                                    ForEach(presets) { preset in
+                                        PresetButton(preset: preset) {
+                                            store.addSubscription(from: preset)
+                                            dismiss()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+            }
+
+            Divider()
+
+            Button {
+                store.addSubscription()
+                dismiss()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle")
+                    Text("직접 입력")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 24)
+        }
+        .frame(width: 440, height: 530)
+    }
+}
+
+struct PresetButton: View {
+    let preset: SubscriptionPreset
+    let action: () -> Void
+
+    private var color: Color { ServiceAppearance.color(named: preset.colorName) }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(color.gradient)
+                    Image(systemName: preset.symbolName)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 52, height: 52)
+                .shadow(color: color.opacity(0.35), radius: 6, x: 0, y: 3)
+
+                Text(preset.name)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity)
+            .background(.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
