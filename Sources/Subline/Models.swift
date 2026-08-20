@@ -102,6 +102,20 @@ enum BillingPeriodUnit: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum IconStyle: String, CaseIterable, Codable, Identifiable {
+    case symbol
+    case image
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .symbol: "심볼"
+        case .image: "사진"
+        }
+    }
+}
+
 enum SubscriptionStatus: String, CaseIterable, Codable, Identifiable {
     case active
     case trial
@@ -176,6 +190,7 @@ struct Subscription: Identifiable, Codable, Hashable {
     var symbolName: String
     var symbolForeground: String
     var iconImageURL: String?
+    var iconStyle: IconStyle
 
     init(
         id: UUID = UUID(),
@@ -197,7 +212,8 @@ struct Subscription: Identifiable, Codable, Hashable {
         colorName: String = "blue",
         symbolName: String = "repeat",
         symbolForeground: String = "white",
-        iconImageURL: String? = nil
+        iconImageURL: String? = nil,
+        iconStyle: IconStyle = .symbol
     ) {
         self.id = id
         self.name = name
@@ -220,6 +236,7 @@ struct Subscription: Identifiable, Codable, Hashable {
         self.symbolName = symbolName
         self.symbolForeground = symbolForeground
         self.iconImageURL = iconImageURL
+        self.iconStyle = iconStyle
     }
 
     var monthsPerCharge: Double {
@@ -294,6 +311,7 @@ struct Subscription: Identifiable, Codable, Hashable {
         case symbolName
         case symbolForeground
         case iconImageURL
+        case iconStyle
     }
 
     init(from decoder: Decoder) throws {
@@ -337,6 +355,11 @@ struct Subscription: Identifiable, Codable, Hashable {
         symbolName = try container.decodeIfPresent(String.self, forKey: .symbolName) ?? Self.suggestedSymbolName(for: name)
         symbolForeground = try container.decodeIfPresent(String.self, forKey: .symbolForeground) ?? "white"
         iconImageURL = try container.decodeIfPresent(String.self, forKey: .iconImageURL)
+        // Migration: previously icons were auto-fetched as remote iTunes URLs, which were
+        // often wrong. Only treat locally-stored (user-chosen) files as photo mode by default.
+        let isLocalImage = iconImageURL.flatMap { URL(string: $0)?.isFileURL } ?? false
+        iconStyle = try container.decodeIfPresent(IconStyle.self, forKey: .iconStyle)
+            ?? (isLocalImage ? .image : .symbol)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -363,6 +386,7 @@ struct Subscription: Identifiable, Codable, Hashable {
         try container.encode(symbolName, forKey: .symbolName)
         try container.encode(symbolForeground, forKey: .symbolForeground)
         try container.encodeIfPresent(iconImageURL, forKey: .iconImageURL)
+        try container.encode(iconStyle, forKey: .iconStyle)
     }
 
     static func period(from cycle: BillingCycle, customMonths: Int) -> (value: Int, unit: BillingPeriodUnit) {
@@ -458,36 +482,35 @@ struct SubscriptionPreset: Identifiable {
     let billingPeriodValue: Int
     let billingPeriodUnit: BillingPeriodUnit
     let category: String
-    let appStoreSearchTerm: String?
 
     init(name: String, symbolName: String, colorName: String, amount: Decimal, currency: CurrencyCode,
-         billingPeriodValue: Int, billingPeriodUnit: BillingPeriodUnit, category: String, appStoreSearchTerm: String? = nil) {
+         billingPeriodValue: Int, billingPeriodUnit: BillingPeriodUnit, category: String) {
         self.name = name; self.symbolName = symbolName; self.colorName = colorName
         self.amount = amount; self.currency = currency
         self.billingPeriodValue = billingPeriodValue; self.billingPeriodUnit = billingPeriodUnit
-        self.category = category; self.appStoreSearchTerm = appStoreSearchTerm
+        self.category = category
     }
 
     static let all: [SubscriptionPreset] = [
-        .init(name: "Netflix",         symbolName: "play.tv",                                 colorName: "red",    amount: 17000, currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍", appStoreSearchTerm: "Netflix"),
-        .init(name: "Spotify",         symbolName: "headphones",                              colorName: "green",  amount: 9.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍", appStoreSearchTerm: "Spotify Music"),
-        .init(name: "Apple Music",     symbolName: "music.note",                              colorName: "red",    amount: 10900, currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍", appStoreSearchTerm: "Apple Music"),
-        .init(name: "YouTube Premium", symbolName: "play.rectangle.fill",                    colorName: "red",    amount: 14900, currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍", appStoreSearchTerm: "YouTube"),
-        .init(name: "Disney+",         symbolName: "star.fill",                               colorName: "blue",   amount: 9.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍", appStoreSearchTerm: "Disney+"),
-        .init(name: "iCloud+",         symbolName: "icloud.fill",                             colorName: "blue",   amount: 3900,  currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "클라우드", appStoreSearchTerm: nil),
-        .init(name: "Google One",      symbolName: "cloud.fill",                              colorName: "blue",   amount: 2.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "클라우드", appStoreSearchTerm: "Google One"),
-        .init(name: "Claude",          symbolName: "sparkles",                                colorName: "orange", amount: 20,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "AI",    appStoreSearchTerm: "Claude AI"),
-        .init(name: "ChatGPT Plus",    symbolName: "waveform",                                colorName: "teal",   amount: 20,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "AI",    appStoreSearchTerm: "ChatGPT"),
-        .init(name: "Notion",          symbolName: "doc.fill",                                colorName: "gray",   amount: 8,     currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "생산성", appStoreSearchTerm: "Notion"),
-        .init(name: "Todoist",         symbolName: "checklist",                               colorName: "red",    amount: 4,     currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "생산성", appStoreSearchTerm: "Todoist"),
-        .init(name: "1Password",       symbolName: "key.fill",                                colorName: "blue",   amount: 2.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "생산성", appStoreSearchTerm: "1Password"),
-        .init(name: "GitHub Copilot",  symbolName: "chevron.left.forwardslash.chevron.right", colorName: "gray",   amount: 10,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발",  appStoreSearchTerm: "GitHub"),
-        .init(name: "Figma",           symbolName: "paintpalette",                            colorName: "purple", amount: 15,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발",  appStoreSearchTerm: "Figma"),
-        .init(name: "Cursor",          symbolName: "terminal.fill",                           colorName: "gray",   amount: 20,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발",  appStoreSearchTerm: "Cursor Code Editor"),
-        .init(name: "Setapp",          symbolName: "square.stack.3d.up.fill",                 colorName: "purple", amount: 9.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발",  appStoreSearchTerm: "Setapp"),
-        .init(name: "Discord Nitro",   symbolName: "message.fill",                            colorName: "indigo", amount: 9.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "기타",  appStoreSearchTerm: "Discord"),
-        .init(name: "Xbox Game Pass",  symbolName: "gamecontroller",                          colorName: "green",  amount: 14.99, currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "기타",  appStoreSearchTerm: "Xbox"),
-        .init(name: "Duolingo Plus",   symbolName: "globe",                                   colorName: "green",  amount: 6.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "기타",  appStoreSearchTerm: "Duolingo"),
+        .init(name: "Netflix",         symbolName: "play.tv",                                 colorName: "red",    amount: 17000, currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "Spotify",         symbolName: "headphones",                              colorName: "green",  amount: 9.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "Apple Music",     symbolName: "music.note",                              colorName: "red",    amount: 10900, currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "YouTube Premium", symbolName: "play.rectangle.fill",                    colorName: "red",    amount: 14900, currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "Disney+",         symbolName: "star.fill",                               colorName: "blue",   amount: 9.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "스트리밍"),
+        .init(name: "iCloud+",         symbolName: "icloud.fill",                             colorName: "blue",   amount: 3900,  currency: .krw, billingPeriodValue: 1, billingPeriodUnit: .months, category: "클라우드"),
+        .init(name: "Google One",      symbolName: "cloud.fill",                              colorName: "blue",   amount: 2.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "클라우드"),
+        .init(name: "Claude",          symbolName: "sparkles",                                colorName: "orange", amount: 20,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "AI"),
+        .init(name: "ChatGPT Plus",    symbolName: "waveform",                                colorName: "teal",   amount: 20,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "AI"),
+        .init(name: "Notion",          symbolName: "doc.fill",                                colorName: "gray",   amount: 8,     currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "생산성"),
+        .init(name: "Todoist",         symbolName: "checklist",                               colorName: "red",    amount: 4,     currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "생산성"),
+        .init(name: "1Password",       symbolName: "key.fill",                                colorName: "blue",   amount: 2.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "생산성"),
+        .init(name: "GitHub Copilot",  symbolName: "chevron.left.forwardslash.chevron.right", colorName: "gray",   amount: 10,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발"),
+        .init(name: "Figma",           symbolName: "paintpalette",                            colorName: "purple", amount: 15,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발"),
+        .init(name: "Cursor",          symbolName: "terminal.fill",                           colorName: "gray",   amount: 20,    currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발"),
+        .init(name: "Setapp",          symbolName: "square.stack.3d.up.fill",                 colorName: "purple", amount: 9.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "개발"),
+        .init(name: "Discord Nitro",   symbolName: "message.fill",                            colorName: "indigo", amount: 9.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "기타"),
+        .init(name: "Xbox Game Pass",  symbolName: "gamecontroller",                          colorName: "green",  amount: 14.99, currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "기타"),
+        .init(name: "Duolingo Plus",   symbolName: "globe",                                   colorName: "green",  amount: 6.99,  currency: .usd, billingPeriodValue: 1, billingPeriodUnit: .months, category: "기타"),
     ]
 }
 

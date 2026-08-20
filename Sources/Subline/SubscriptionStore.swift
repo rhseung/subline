@@ -33,7 +33,6 @@ final class SubscriptionStore: ObservableObject {
         }
 
         fetchRatesIfNeeded()
-        fetchMissingIcons()
     }
 
     var selectedSubscription: Subscription? {
@@ -61,15 +60,6 @@ final class SubscriptionStore: ObservableObject {
         )
         subscriptions.append(subscription)
         selectedID = subscription.id
-
-        guard let term = preset.appStoreSearchTerm else { return }
-        let subID = subscription.id
-        Task {
-            guard let url = await fetchAppIconURL(searchTerm: term),
-                  let idx = subscriptions.firstIndex(where: { $0.id == subID })
-            else { return }
-            subscriptions[idx].iconImageURL = url
-        }
     }
 
     func addSubscription() {
@@ -257,39 +247,52 @@ final class SubscriptionStore: ObservableObject {
         rates = ExchangeRates()
     }
 
-    func fetchMissingIcons() {
-        for sub in subscriptions where sub.iconImageURL == nil {
-            let subLow = sub.name.lowercased()
-            guard let matched = SubscriptionPreset.all.first(where: { preset in
-                guard preset.appStoreSearchTerm != nil else { return false }
-                let pLow = preset.name.lowercased()
-                return subLow == pLow || subLow.contains(pLow) || pLow.contains(subLow)
-            }), let term = matched.appStoreSearchTerm else { continue }
+    private var iconsDirectory: URL {
+        fileURL.deletingLastPathComponent().appending(path: "icons", directoryHint: .isDirectory)
+    }
 
-            let subID = sub.id
-            Task {
-                guard let url = await fetchAppIconURL(searchTerm: term),
-                      let idx = subscriptions.firstIndex(where: { $0.id == subID })
-                else { return }
-                subscriptions[idx].iconImageURL = url
-            }
+    /// Lets the user pick an image file, copies it into the app's storage,
+    /// and switches the subscription to photo mode.
+    func chooseIconImage(for id: Subscription.ID) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .gif, .image]
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.title = "아이콘 이미지 선택"
+        guard panel.runModal() == .OK, let source = panel.url,
+              let index = subscriptions.firstIndex(where: { $0.id == id }) else { return }
+
+        removeStoredIconFile(for: subscriptions[index])
+
+        try? FileManager.default.createDirectory(at: iconsDirectory, withIntermediateDirectories: true)
+        let ext = source.pathExtension.isEmpty ? "png" : source.pathExtension
+        let destination = iconsDirectory.appending(path: "\(id.uuidString).\(ext)")
+        do {
+            try FileManager.default.copyItem(at: source, to: destination)
+        } catch {
+            return
+        }
+
+        subscriptions[index].iconImageURL = destination.absoluteString
+        subscriptions[index].iconStyle = .image
+        if let hex = ServiceAppearance.dominantColorHex(of: destination) {
+            subscriptions[index].colorName = hex
         }
     }
 
-    private func fetchAppIconURL(searchTerm: String) async -> String? {
-        guard let encoded = searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://itunes.apple.com/search?term=\(encoded)&entity=software&limit=1&country=us")
-        else { return nil }
+    /// Clears a custom photo and falls back to the symbol style.
+    func removeIconImage(for id: Subscription.ID) {
+        guard let index = subscriptions.firstIndex(where: { $0.id == id }) else { return }
+        removeStoredIconFile(for: subscriptions[index])
+        subscriptions[index].iconImageURL = nil
+        subscriptions[index].iconStyle = .symbol
+    }
 
-        struct Response: Decodable { let results: [AppResult] }
-        struct AppResult: Decodable { let artworkUrl100: String? }
-
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
-              let response = try? JSONDecoder().decode(Response.self, from: data),
-              let url100 = response.results.first?.artworkUrl100
-        else { return nil }
-
-        return url100.replacingOccurrences(of: "100x100bb", with: "256x256bb")
+    private func removeStoredIconFile(for subscription: Subscription) {
+        guard let urlString = subscription.iconImageURL,
+              let url = URL(string: urlString), url.isFileURL else { return }
+        try? FileManager.default.removeItem(at: url)
     }
 
     struct BindingBox {

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
@@ -433,22 +434,36 @@ struct SubscriptionEditor: View {
                 }
 
                 EditorSection("표시") {
-                    EditorRow("색상") {
-                        ColorSwatchPicker(selection: $subscription.colorName)
-                            .labelsHidden()
-                    }
-                    Divider().padding(.leading, 14)
-                    EditorRow("아이콘 색상") {
-                        Picker("", selection: $subscription.symbolForeground) {
-                            Text("흰색").tag("white")
-                            Text("검정").tag("black")
+                    EditorRow("스타일") {
+                        Picker("", selection: $subscription.iconStyle) {
+                            ForEach(IconStyle.allCases) { Text($0.title).tag($0) }
                         }
+                        .pickerStyle(.segmented)
                         .labelsHidden()
                         .fixedSize()
                     }
-                    Divider().padding(.leading, 14)
-                    IconGridPicker(selection: $subscription.symbolName)
-                        .padding(.horizontal, 14).padding(.vertical, 10)
+                    if subscription.iconStyle == .symbol {
+                        Divider().padding(.leading, 14)
+                        EditorRow("색상") {
+                            ColorSwatchPicker(selection: $subscription.colorName)
+                                .labelsHidden()
+                        }
+                        Divider().padding(.leading, 14)
+                        EditorRow("아이콘 색상") {
+                            Picker("", selection: $subscription.symbolForeground) {
+                                Text("흰색").tag("white")
+                                Text("검정").tag("black")
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+                        Divider().padding(.leading, 14)
+                        IconGridPicker(selection: $subscription.symbolName)
+                            .padding(.horizontal, 14).padding(.vertical, 10)
+                    } else {
+                        Divider().padding(.leading, 14)
+                        PhotoPickerRow(subscription: subscription)
+                    }
                 }
 
                 EditorSection("결제") {
@@ -617,24 +632,33 @@ struct SubscriptionEditor: View {
 struct HeaderCard: View {
     let subscription: Subscription
     @EnvironmentObject private var store: SubscriptionStore
+    @State private var photoGlowColor: Color?
+
+    private var isPhoto: Bool {
+        subscription.iconStyle == .image && subscription.iconImageURL != nil
+    }
 
     private var brandColor: Color {
-        ServiceAppearance.color(named: subscription.colorName)
+        if isPhoto, let photoGlowColor { return photoGlowColor }
+        return ServiceAppearance.color(named: subscription.colorName)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 Ellipse()
-                    .fill(brandColor.opacity(0.28))
-                    .frame(width: 110, height: 46)
-                    .blur(radius: 22)
+                    .fill(brandColor.opacity(isPhoto ? 0.45 : 0.28))
+                    .frame(width: isPhoto ? 132 : 110, height: isPhoto ? 56 : 46)
+                    .blur(radius: isPhoto ? 26 : 22)
 
                 ServiceIcon(subscription: subscription, size: 64)
-                    .shadow(color: brandColor.opacity(0.3), radius: 10, x: 0, y: 4)
+                    .shadow(color: brandColor.opacity(isPhoto ? 0.45 : 0.3), radius: isPhoto ? 12 : 10, x: 0, y: 4)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 22)
+            .task(id: "\(subscription.iconStyle.rawValue)|\(subscription.iconImageURL ?? "")") {
+                await updatePhotoGlow()
+            }
 
             VStack(spacing: 4) {
                 Text(subscription.name)
@@ -681,6 +705,19 @@ struct HeaderCard: View {
                 ))
                 .allowsHitTesting(false)
         }
+    }
+
+    private func updatePhotoGlow() async {
+        guard subscription.iconStyle == .image,
+              let urlString = subscription.iconImageURL,
+              let url = URL(string: urlString) else {
+            photoGlowColor = nil
+            return
+        }
+        let hex = await Task.detached(priority: .userInitiated) {
+            ServiceAppearance.dominantColorHex(of: url)
+        }.value
+        photoGlowColor = hex.map { Color(hex: $0) }
     }
 }
 
@@ -1014,11 +1051,32 @@ struct ServiceIcon: View {
     let subscription: Subscription
     let size: CGFloat
 
-    var body: some View {
-        ZStack {
-            symbolIcon
+    private var imageURL: URL? {
+        guard subscription.iconStyle == .image,
+              let urlString = subscription.iconImageURL else { return nil }
+        return URL(string: urlString)
+    }
 
-            if let urlString = subscription.iconImageURL, let url = URL(string: urlString) {
+    var body: some View {
+        Group {
+            if let url = imageURL {
+                imageIcon(url)
+            } else {
+                symbolIcon
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+
+    private func imageIcon(_ url: URL) -> some View {
+        ZStack {
+            // Neutral backdrop so transparent logos don't reveal anything behind them.
+            Circle().fill(Color(nsColor: .windowBackgroundColor))
+
+            if url.isFileURL, let nsImage = NSImage(contentsOf: url) {
+                Image(nsImage: nsImage).resizable().scaledToFill()
+            } else {
                 AsyncImage(url: url) { phase in
                     if let image = phase.image {
                         image.resizable().scaledToFill()
@@ -1027,7 +1085,6 @@ struct ServiceIcon: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(Circle())
     }
 
     private var symbolIcon: some View {
@@ -1039,6 +1096,43 @@ struct ServiceIcon: View {
                 .foregroundStyle(subscription.symbolForeground == "black" ? Color.black : Color.white)
         }
         .frame(width: size, height: size)
+    }
+}
+
+struct PhotoPickerRow: View {
+    let subscription: Subscription
+    @EnvironmentObject private var store: SubscriptionStore
+
+    private var hasImage: Bool { subscription.iconImageURL != nil }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ServiceIcon(subscription: subscription, size: 44)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hasImage ? "사진 사용 중" : "선택된 사진 없음")
+                    .font(.callout)
+                Text("PNG, JPG 등의 이미지 파일")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 6) {
+                Button(hasImage ? "변경..." : "사진 선택...") {
+                    store.chooseIconImage(for: subscription.id)
+                }
+                if hasImage {
+                    Button("제거", role: .destructive) {
+                        store.removeIconImage(for: subscription.id)
+                    }
+                    .font(.caption)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 }
 
@@ -1192,6 +1286,74 @@ enum ServiceAppearance {
         case "gray": return .gray
         default: return colors.first { $0.name == name }?.color ?? .blue
         }
+    }
+
+    /// Extracts a vivid representative color from an image so glows/accents match a photo icon.
+    /// Saturation-weighted so white padding and gray fills don't wash the result out.
+    static func dominantColorHex(of url: URL) -> String? {
+        guard let image = NSImage(contentsOf: url),
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let cgImage = bitmap.cgImage else { return nil }
+
+        let side = 32
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: &pixels, width: side, height: side, bitsPerComponent: 8,
+            bytesPerRow: side * 4, space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .medium
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
+
+        var rAcc = 0.0, gAcc = 0.0, bAcc = 0.0, weightAcc = 0.0
+        var rPlain = 0.0, gPlain = 0.0, bPlain = 0.0, plainAcc = 0.0
+        for i in stride(from: 0, to: pixels.count, by: 4) {
+            let a = Double(pixels[i + 3])
+            guard a > 16 else { continue }
+            let scale = 255.0 / a
+            let r = min(1.0, Double(pixels[i]) * scale / 255.0)
+            let g = min(1.0, Double(pixels[i + 1]) * scale / 255.0)
+            let b = min(1.0, Double(pixels[i + 2]) * scale / 255.0)
+
+            let maxC = max(r, g, b), minC = min(r, g, b)
+            let sat = maxC <= 0 ? 0 : (maxC - minC) / maxC
+            let alpha = a / 255.0
+
+            rPlain += r * alpha; gPlain += g * alpha; bPlain += b * alpha; plainAcc += alpha
+            // Favor vivid, mid-bright pixels; ignore near-black noise.
+            let weight = maxC > 0.1 ? alpha * pow(sat, 1.5) : 0
+            rAcc += r * weight; gAcc += g * weight; bAcc += b * weight; weightAcc += weight
+        }
+
+        let r, g, b: Double
+        if weightAcc > 0.0001 {
+            (r, g, b) = boosted(rAcc / weightAcc, gAcc / weightAcc, bAcc / weightAcc)
+        } else if plainAcc > 0 {
+            (r, g, b) = (rPlain / plainAcc, gPlain / plainAcc, bPlain / plainAcc)
+        } else {
+            return nil
+        }
+        return String(format: "#%02X%02X%02X",
+                      Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
+    }
+
+    /// Nudges a color toward a punchier glow by lifting saturation and brightness.
+    private static func boosted(_ r: Double, _ g: Double, _ b: Double) -> (Double, Double, Double) {
+        let maxC = max(r, g, b), minC = min(r, g, b)
+        let brightness = maxC
+        let saturation = maxC <= 0 ? 0 : (maxC - minC) / maxC
+        guard saturation > 0, brightness > 0 else { return (r, g, b) }
+
+        let targetSat = min(1.0, max(saturation, 0.55))
+        let targetBri = min(1.0, max(brightness, 0.72))
+        let scale = targetBri / brightness
+        // Scale toward the max channel to raise saturation, then lift overall brightness.
+        let nr = (maxC - (maxC - r) * (targetSat / saturation)) * scale
+        let ng = (maxC - (maxC - g) * (targetSat / saturation)) * scale
+        let nb = (maxC - (maxC - b) * (targetSat / saturation)) * scale
+        return (min(1, max(0, nr)), min(1, max(0, ng)), min(1, max(0, nb)))
     }
 
     struct ColorOption: Identifiable {
