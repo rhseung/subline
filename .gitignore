@@ -11,3 +11,5 @@ xcuserdata/
 *.ipa
 *.dSYM.zip
 *.dSYM
+build/
+_workspace/
